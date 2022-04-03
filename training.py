@@ -47,7 +47,9 @@ class Trainer():
         self.model_path = logger.get_model_path()
         self.log_dir = logger.get_log_dir()
         self.num_devices = len(args.device)  
-        self.clip = 1000              
+        self.clip = 1000
+
+        self.dropout_type = args.dropout_type              
 
         self.model.to(self.device)
 

@@ -4,6 +4,103 @@ import numpy as np
 from dpp_sampling import select_k_eigenvalues_from_L, select_samples_from_L
 from sklearn.metrics.pairwise import pairwise_kernels
 
+
+
+class Dropout():
+    def __init__(self, dropout_proportion:float, layer : nn.Module):
+        self.dropout_proportion = dropout_proportion
+
+    def update_kernel(self,data_loader):
+        pass
+    
+    def apply_dropout(self):
+        pass
+        
+
+
+class BernDrop(Dropout):
+
+    def apply_dropout(self, x : torch.Tensor):
+        ''' Keeps k values with equal probability '''
+
+        k = int(x.shape[-1] * (1 - self.dropout_proportion))
+
+        print(k)
+        mask = torch.ones_like(x)
+
+        N = x.shape[-1]
+        weights = torch.ones_like(x) / N # uniformly
+        idxs = torch.multinomial(weights, N - k)
+                
+        mask.scatter_(1, idxs, 0.)
+
+        # Rescale to make testing mode easier
+        x = x * mask 
+        x = x / (k/N)    
+
+        return x    
+
+
+class RBFDrop(Dropout):
+
+       
+    def update_kernel(self,embeddings):                
+
+        print('****** Updating DPP Kernel ******')                        
+        embeddings = embeddings.transpose()
+        N = embeddings.shape[-1]        
+
+        # Step 1: Build the DPP
+        with torch.no_grad():                        
+            dist = np.linalg.norm(embeddings[:, None, :] - embeddings[None, :, :], axis=-1)**2
+            L = np.exp(- 20 * dist / N) 
+            
+            ##### Define the DPP 
+            self.eig_vals, self.eig_vecs = np.linalg.eigh(L)
+
+    
+    def apply_dropout(self, x : torch.Tensor):
+        ''' Keeps k values with equal probability '''
+        device = x.device
+        k = int(x.shape[-1] * (1 - self.dropout_proportion))
+
+        B = x.shape[0] # batch size
+        D = x.shape[-1] # dimension
+        
+        assert k <= D # can't have less samples than you are sampling    
+        
+        
+        # Step 2: Sample from the DPP for each sample
+        idxs = torch.zeros(B,k, dtype = torch.int64, device = device)
+        for b in range(B):
+            vec_idx = select_k_eigenvalues_from_L(k,self.eig_vals) 
+            sample_vecs = self.eig_vecs[:, vec_idx]        
+            sample_idx = select_samples_from_L(sample_vecs)   
+
+            idxs[b,:] = torch.tensor(sample_idx)
+
+        # Step 3: Build and apply our mask
+        mask = torch.zeros_like(x) 
+        mask.scatter_(1,idxs,1.)
+
+        x = x / (1 - (D-k)/D)
+        x = x * mask
+
+        return x
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
 def dropout(features:torch.Tensor, x : torch.Tensor, dropout_proportion:float, dropout_type : 'str'):
     # K is how many nodes we keep
     k = int(features.shape[-1] * (1 - dropout_proportion))

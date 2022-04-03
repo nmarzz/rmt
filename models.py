@@ -5,13 +5,14 @@ from argparse import Namespace
 import torch.nn.functional as F
 import torchvision
 import torch
+import numpy as np
 
 from dropout import dropout
 
 class MLP(nn.Module):
     ''' A basic 3 layer MLP '''
 
-    def __init__(self, input_dim: int, num_classes: int, hidden_dim: int = 64, dropout_proportion : int = None, dropout_type : str = 'k_bernoulli') -> None:
+    def __init__(self, input_dim: int, num_classes: int, hidden_dim: int = 64, dropout_proportion : float = None, dropout_type : str = 'k_bernoulli') -> None:
         super(MLP, self).__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(input_dim, hidden_dim)        
@@ -19,6 +20,7 @@ class MLP(nn.Module):
         self.fc3 = nn.Linear(hidden_dim, num_classes)
         self.dropout_type = dropout_type
         self.dropout_proportion = dropout_proportion
+        self.num_layers = 3
 
         # Keep this around to compare to torch's dropout
         if self.dropout_type == 'pytorch':
@@ -44,6 +46,52 @@ class MLP(nn.Module):
         
         x = self.fc3(x)
         return x
+
+    def output_embeds(self, x):
+        x = x.view(-1, self.input_dim)
+        x = F.relu(self.fc1(x))
+
+        x1 = x.clone()        
+                
+        if self.training:            
+            if self.dropout_type == 'pytorch':
+                x = self.d1(x)
+            else:
+                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
+
+        x = F.relu(self.fc2(x))                
+
+        x2 = x.clone()
+
+        if self.training:            
+            if self.dropout_type == 'pytorch':
+                x = self.d1(x)
+            else:
+                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
+        
+        x = self.fc3(x)
+
+        x3 = x.clone()
+
+        return x1,x2,x3
+
+
+def get_embeddings(model: nn.Module, loader):
+    """Get layer's embeddings on data in numpy format """                
+    model.eval()
+    
+    embeddings = [None for _ in range(model.num_layers)]    
+
+    with torch.no_grad():
+        for data, _ in loader:            
+            embs = model.output_embeds(data)
+            for i,e in enumerate(embs):
+                if embeddings[i] is None:
+                    embeddings[i] = e.cpu().numpy()
+                else:
+                    embeddings[i] = np.concatenate([embeddings[i], e.cpu().numpy()], axis = 0)
+       
+    return embeddings
 
 
 def get_model(model_type: str, args: Namespace):
