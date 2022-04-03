@@ -5,11 +5,9 @@ from torch import nn
 from torch.utils.data import DataLoader
 from argparse import Namespace
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 import numpy as np
 from logger import Logger
 from loss_functions import get_loss_function
-from torch.cuda.amp import GradScaler, autocast
 import time
 
 
@@ -48,9 +46,8 @@ class Trainer():
         self.eval_set = 'Validation Set'
         self.model_path = logger.get_model_path()
         self.log_dir = logger.get_log_dir()
-        self.num_devices = len(args.device)
-        self.clip = args.clip
-        self.scaler = GradScaler()
+        self.num_devices = len(args.device)  
+        self.clip = 1000              
 
         self.model.to(self.device)
 
@@ -64,19 +61,7 @@ class Trainer():
                 model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         else:
             raise ValueError('Optimizer not supported')
-
-        self.sched_str = args.scheduler
-        if self.sched_str == 'plateau':
-            self.scheduler = ReduceLROnPlateau(
-                self.optimizer, patience=args.plateau_patience, verbose=True)
-            self.plateau_factor = 0.1
-            self.change_epochs = []
-        elif self.sched_str == 'cosine':
-            self.scheduler = CosineAnnealingLR(self.optimizer, T_max=200)
-            self.change_epochs = None
-        else:
-            raise ValueError('Scheduler not available')
-
+        
     def train(self):
         epochs_until_stop = self.early_stop
 
@@ -142,16 +127,6 @@ class Trainer():
                         torch.save(self.model.state_dict(), current_model_path)
                     self.logger.log("Model saved.\n")
 
-            if self.sched_str == 'plateau':
-                self.scheduler.step(val_loss)
-                if self.optimizer.param_groups[0]['lr'] == self.plateau_factor * self.lr:
-                    self.change_epochs.append(epoch)
-                    self.lr = self.plateau_factor * self.lr
-                    self.logger.log(
-                        "Learning rate decreasing to {}\n".format(self.lr))
-            else:
-                self.scheduler.step()
-
         self.logger.log('Training time: {} s'.format(time.time() - train_start))
 
         if self.idx == 0:
@@ -162,7 +137,7 @@ class Trainer():
     def train_report(self):
         best_epoch = np.argmax(self.val_accs)
         self.logger.log("Training complete.\n")
-        self.logger.log("Best Epoch: {}".format(best_epoch + 1))
+        self.logger.log("Best Epoch: {}".format(best_epoch))
         self.logger.log("Training Loss: {:.6f}".format(
             self.train_losses[best_epoch]))
         if self.train_accs[best_epoch] is not None:
@@ -198,24 +173,18 @@ class GeneralTrainer(Trainer):
             data, target = data.to(self.device, non_blocking = True), target.to(self.device, non_blocking = True)
             self.optimizer.zero_grad(set_to_none= True)
 
-            with autocast():
-                output = self.model(data)
-                loss = self.loss_function(output, target)
+            output = self.model(data)
+            loss = self.loss_function(output, target)
             top1_acc, top5_acc = compute_accuracy(output, target)
             train_loss.update(loss.item())
             train_top1_acc.update(top1_acc)
             train_top5_acc.update(top5_acc)
             
-            self.scaler.scale(loss).backward()
-            self.scaler.unscale_(self.optimizer)
-
-            # Clip the gradients for stability
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)
+            loss.backward()          
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip)                  
             
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            self.optimizer.step()            
             
-
             if batch_idx % 10 == 0:
                 logged_loss = train_loss.get_avg()
 
@@ -298,10 +267,9 @@ def predict(model: nn.Module, device: torch.device,
     with torch.no_grad():
         for data, target in loader:
             data, target = data.to(device, non_blocking = True), target.to(device, non_blocking = True)
-
-            with autocast():
-                output = model(data)            
-                loss = loss_function(output, target)
+            
+            output = model(data)            
+            loss = loss_function(output, target)
             total_loss += loss.item()
 
             cur_acc1, cur_acc5 = compute_accuracy(output, target)
