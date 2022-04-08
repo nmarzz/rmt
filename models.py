@@ -7,7 +7,7 @@ import torchvision
 import torch
 import numpy as np
 
-from dropout import dropout, RBFDrop, BernDrop
+from dropout import RBFDrop, BernDrop, SineDrop
 
 class MLP(nn.Module):
     ''' A basic 3 layer MLP '''
@@ -18,6 +18,7 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(input_dim, hidden_dim * 4)        
         self.fc2 = nn.Linear(hidden_dim * 4, hidden_dim)
         self.register_buffer('rescaling', torch.zeros(hidden_dim))
+        self.batches_trained_for = 0
         self.fc3 = nn.Linear(hidden_dim, num_classes)
         self.dropout_type = dropout_type
         self.dropout_proportion = dropout_proportion
@@ -33,6 +34,8 @@ class MLP(nn.Module):
             self.dropout = RBFDrop(self.dropout_proportion)
         elif self.dropout_type == 'k_bernoulli':
             self.dropout = BernDrop(self.dropout_proportion)
+        elif self.dropout_type == 'sine':
+            self.dropout = SineDrop(self.dropout_proportion)
     
 
     def forward(self, x):
@@ -44,8 +47,21 @@ class MLP(nn.Module):
             if self.dropout_type == 'pytorch':
                 x = self.d1(x)
             elif self.dropout_type != 'no_dropout':                            
-                x = self.dropout.apply_dropout(x)
+                x, dropped_indices = self.dropout.apply_dropout(x)
+                self.batches_trained_for += 1
+                self.rescaling[dropped_indices] += 1
+                # print(self.rescaling)
+                # print(self.batches_trained_for)
+                # print( self.rescaling / self.batches_trained_for)
+        else:
+            if (self.dropout_type == 'pytorch') or (self.dropout_type == 'no_dropout'):
+                pass
+            elif self.dropout_type != 'no_dropout':                            
+                # Rescale the output to account for the dropout process                    
+                x = x * self.rescaling / self.batches_trained_for         
+
         x = self.fc3(x)
+
         return x
 
     def output_embeds(self, x):
@@ -60,11 +76,17 @@ class MLP(nn.Module):
             if self.dropout_type == 'pytorch':
                 x = self.d1(x)
             elif self.dropout_type != 'no_dropout':                            
-                x = self.dropout.apply_dropout(x)
-        
-        x = self.fc3(x)
-        x3 = x.clone()
+                x, dropped_indices = self.dropout.apply_dropout(x)
+                self.batches_trained_for += 1
+                self.rescaling[dropped_indices] += 1
+        else:
+            if (self.dropout_type == 'pytorch') or (self.dropout_type == 'no_dropout'):
+                pass
+            elif self.dropout_type != 'no_dropout':                            
+                # Rescale the output to account for the dropout process                    
+                x = x * self.rescaling / self.batches_trained_for 
 
+        x3 = x.clone()
         return x1,x2,x3
     
     @property
