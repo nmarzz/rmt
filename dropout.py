@@ -52,7 +52,7 @@ class RBFDrop(Dropout):
         # Step 1: Build the DPP
         with torch.no_grad():                        
             dist = np.linalg.norm(embeddings[:, None, :] - embeddings[None, :, :], axis=-1)**2
-            L = np.exp(- 40 * dist / N) 
+            L = np.exp(- 20 * dist / N) 
             
             ##### Define the DPP 
             self.eig_vals, self.eig_vecs = np.linalg.eigh(L)
@@ -70,19 +70,19 @@ class RBFDrop(Dropout):
         
         assert self.k <= D # can't have less samples than you are sampling                    
         
-        # Step 2: Sample from the DPP for each sample
-        idxs = torch.zeros(B,self.k, dtype = torch.int64, device = device)
-        for b in range(B):
-            vec_idx = select_k_eigenvalues_from_L(self.k,self.eig_vals, self.elementary_symmetric_polynomials) 
-            sample_vecs = self.eig_vecs[:, vec_idx]        
-            sample_idx = select_samples_from_L(sample_vecs)   
+        # Step 2: Sample from the DPP once for each batch        
+        vec_idx = select_k_eigenvalues_from_L(self.k,self.eig_vals, self.elementary_symmetric_polynomials) 
+        sample_vecs = self.eig_vecs[:, vec_idx]        
+        sample_idx = select_samples_from_L(sample_vecs)   
 
-            idxs[b,:] = torch.tensor(sample_idx)
+        idxs = torch.tensor(sample_idx)
 
         # Step 3: Build and apply our mask
-        mask = torch.ones_like(x) 
-        # mask.scatter_(1,idxs,1.)
-        mask.scatter_(1,idxs,0.) # Testing cause it did bad
+        mask = torch.zeros_like(x) 
+        mask[:,idxs] = 1        
+
+        # mask = torch.ones_like(x) 
+        # mask[:,idxs] = 0        
 
         x = x / (1 - self.dropout_proportion)        
         x = x * mask

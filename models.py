@@ -17,6 +17,7 @@ class MLP(nn.Module):
         self.input_dim = input_dim
         self.fc1 = nn.Linear(input_dim, hidden_dim * 4)        
         self.fc2 = nn.Linear(hidden_dim * 4, hidden_dim)
+        self.register_buffer('rescaling', torch.zeros(hidden_dim))
         self.fc3 = nn.Linear(hidden_dim, num_classes)
         self.dropout_type = dropout_type
         self.dropout_proportion = dropout_proportion
