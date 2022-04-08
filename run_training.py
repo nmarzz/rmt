@@ -55,8 +55,7 @@ def main_worker(idx: int, num_gpus: int, distributed: bool, args: argparse.Names
         name=args.dataset, batch_size=batch_size, distributed=distributed, resize = args.pretrained)
 
     # Get model
-    model = get_model(args.model, args)    
-
+    model = get_model(args.model, args)        
     model.to(device)
 
     trainer = GeneralTrainer(model=model, train_loader=train_loader,

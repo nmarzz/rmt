@@ -1,13 +1,13 @@
 import torch.nn as nn
 import torch
 import numpy as np
-from dpp_sampling import select_k_eigenvalues_from_L, select_samples_from_L
+from dpp_sampling import select_k_eigenvalues_from_L, select_samples_from_L, elementary_symmetric_polynomial
 from sklearn.metrics.pairwise import pairwise_kernels
 
 
 
 class Dropout():
-    def __init__(self, dropout_proportion:float, layer : nn.Module):
+    def __init__(self, dropout_proportion:float):
         self.dropout_proportion = dropout_proportion
 
     def update_kernel(self,data_loader):
@@ -23,9 +23,7 @@ class BernDrop(Dropout):
     def apply_dropout(self, x : torch.Tensor):
         ''' Keeps k values with equal probability '''
 
-        k = int(x.shape[-1] * (1 - self.dropout_proportion))
-
-        print(k)
+        k = int(x.shape[-1] * (1 - self.dropout_proportion))        
         mask = torch.ones_like(x)
 
         N = x.shape[-1]
@@ -49,41 +47,44 @@ class RBFDrop(Dropout):
         print('****** Updating DPP Kernel ******')                        
         embeddings = embeddings.transpose()
         N = embeddings.shape[-1]        
+        self.k = int(embeddings.shape[0] * (1 - self.dropout_proportion))        
 
         # Step 1: Build the DPP
         with torch.no_grad():                        
             dist = np.linalg.norm(embeddings[:, None, :] - embeddings[None, :, :], axis=-1)**2
-            L = np.exp(- 20 * dist / N) 
+            L = np.exp(- 40 * dist / N) 
             
             ##### Define the DPP 
             self.eig_vals, self.eig_vecs = np.linalg.eigh(L)
 
+
+        self.elementary_symmetric_polynomials = elementary_symmetric_polynomial(self.k,self.eig_vals)
+        
     
     def apply_dropout(self, x : torch.Tensor):
         ''' Keeps k values with equal probability '''
-        device = x.device
-        k = int(x.shape[-1] * (1 - self.dropout_proportion))
+        device = x.device        
 
         B = x.shape[0] # batch size
         D = x.shape[-1] # dimension
         
-        assert k <= D # can't have less samples than you are sampling    
-        
+        assert self.k <= D # can't have less samples than you are sampling                    
         
         # Step 2: Sample from the DPP for each sample
-        idxs = torch.zeros(B,k, dtype = torch.int64, device = device)
+        idxs = torch.zeros(B,self.k, dtype = torch.int64, device = device)
         for b in range(B):
-            vec_idx = select_k_eigenvalues_from_L(k,self.eig_vals) 
+            vec_idx = select_k_eigenvalues_from_L(self.k,self.eig_vals, self.elementary_symmetric_polynomials) 
             sample_vecs = self.eig_vecs[:, vec_idx]        
             sample_idx = select_samples_from_L(sample_vecs)   
 
             idxs[b,:] = torch.tensor(sample_idx)
 
         # Step 3: Build and apply our mask
-        mask = torch.zeros_like(x) 
-        mask.scatter_(1,idxs,1.)
+        mask = torch.ones_like(x) 
+        # mask.scatter_(1,idxs,1.)
+        mask.scatter_(1,idxs,0.) # Testing cause it did bad
 
-        x = x / (1 - (D-k)/D)
+        x = x / (1 - self.dropout_proportion)        
         x = x * mask
 
         return x

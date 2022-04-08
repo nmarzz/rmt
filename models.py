@@ -7,7 +7,7 @@ import torchvision
 import torch
 import numpy as np
 
-from dropout import dropout
+from dropout import dropout, RBFDrop, BernDrop
 
 class MLP(nn.Module):
     ''' A basic 3 layer MLP '''
@@ -15,8 +15,8 @@ class MLP(nn.Module):
     def __init__(self, input_dim: int, num_classes: int, hidden_dim: int = 64, dropout_proportion : float = None, dropout_type : str = 'k_bernoulli') -> None:
         super(MLP, self).__init__()
         self.input_dim = input_dim
-        self.fc1 = nn.Linear(input_dim, hidden_dim)        
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc1 = nn.Linear(input_dim, hidden_dim * 4)        
+        self.fc2 = nn.Linear(hidden_dim * 4, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, num_classes)
         self.dropout_type = dropout_type
         self.dropout_proportion = dropout_proportion
@@ -24,26 +24,26 @@ class MLP(nn.Module):
 
         # Keep this around to compare to torch's dropout
         if self.dropout_type == 'pytorch':
-            self.d1 = nn.Dropout(p=self.dropout_proportion)
-            self.d2 = nn.Dropout(p=self.dropout_proportion)
+            self.d1 = nn.Dropout(p=self.dropout_proportion)            
+
+
+        ### Build in dropout classes
+        if self.dropout_type == 'rbf':
+            self.dropout = RBFDrop(self.dropout_proportion)
+        elif self.dropout_type == 'k_bernoulli':
+            self.dropout = BernDrop(self.dropout_proportion)
+    
 
     def forward(self, x):
         x = x.view(-1, self.input_dim)
-        x = F.relu(self.fc1(x))        
-                
-        if self.training:            
-            if self.dropout_type == 'pytorch':
-                x = self.d1(x)
-            else:
-                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
+        x = F.relu(self.fc1(x))                               
+        x = F.relu(self.fc2(x))        
 
-        x = F.relu(self.fc2(x))                
         if self.training:            
             if self.dropout_type == 'pytorch':
                 x = self.d1(x)
-            else:
-                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
-        
+            elif self.dropout_type != 'no_dropout':                            
+                x = self.dropout.apply_dropout(x)
         x = self.fc3(x)
         return x
 
@@ -52,38 +52,35 @@ class MLP(nn.Module):
         x = F.relu(self.fc1(x))
 
         x1 = x.clone()        
-                
-        if self.training:            
-            if self.dropout_type == 'pytorch':
-                x = self.d1(x)
-            else:
-                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
-
         x = F.relu(self.fc2(x))                
-
         x2 = x.clone()
-
+                                
         if self.training:            
             if self.dropout_type == 'pytorch':
                 x = self.d1(x)
-            else:
-                x = dropout(x,x,self.dropout_proportion, self.dropout_type)
+            elif self.dropout_type != 'no_dropout':                            
+                x = self.dropout.apply_dropout(x)
         
         x = self.fc3(x)
-
         x3 = x.clone()
 
         return x1,x2,x3
+    
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
 
 def get_embeddings(model: nn.Module, loader):
     """Get layer's embeddings on data in numpy format """                
     model.eval()
+    device = model.device
     
     embeddings = [None for _ in range(model.num_layers)]    
 
     with torch.no_grad():
         for data, _ in loader:            
+            data = data.to(device)
             embs = model.output_embeds(data)
             for i,e in enumerate(embs):
                 if embeddings[i] is None:
@@ -100,6 +97,10 @@ def get_model(model_type: str, args: Namespace):
     if (args.dataset == 'mnist') or (args.dataset == 'fashion_mnist'):
         input_dim = 28*28
         num_channels = 1
+        num_classes = 10
+    elif (args.dataset == 'cifar10'):
+        input_dim = 3*32*32
+        num_channels = 3
         num_classes = 10
     else:
         raise ValueError(

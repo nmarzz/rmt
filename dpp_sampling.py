@@ -48,7 +48,7 @@ def select_samples_from_L(V):
         probs[probs < 0] = 0 # Compensate for small negatives due to round off        
 
         try:
-            if np.abs(np.sum(probs) - 1) <= 0.05: # Allow 5% error
+            if np.abs(np.sum(probs) - 1) <= 0.5: # Allow 5% error
                 probs = probs / np.sum(probs)
 
             j = np.random.choice(indices[avail], p=probs)
@@ -87,7 +87,7 @@ def elementary_symmetric_polynomial(k, eig_vals):
             e[l, n] = e[l, n - 1] + eig_vals[n - 1] * e[l - 1, n - 1]
     return e
 
-def select_k_eigenvalues_from_L(k,eig_vals):
+def select_k_eigenvalues_from_L(k,eig_vals, elementary_symmetric_polynomials = None):
     ''' Step 1 in sampling from a k-DPP. Samples exactly k eigenvalues from the likelihood kernel L
     
     Input:
@@ -97,7 +97,10 @@ def select_k_eigenvalues_from_L(k,eig_vals):
         Indices of selected eigenvalues
     '''
 
-    e = elementary_symmetric_polynomial(k,eig_vals)
+    if elementary_symmetric_polynomials is None:
+        e = elementary_symmetric_polynomial(k,eig_vals)
+    else:
+        e = elementary_symmetric_polynomials
     # print(e)
     N = len(eig_vals)
 

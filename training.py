@@ -9,7 +9,7 @@ import numpy as np
 from logger import Logger
 from loss_functions import get_loss_function
 import time
-
+import models
 
 class Trainer():
     ''' A Trainer base class that handles universal aspects of training.
@@ -79,6 +79,12 @@ class Trainer():
 
         train_start = time.time()
         for epoch in range(1, self.epochs + 1):
+
+            if (self.dropout_type != 'pytorch') and (self.dropout_type != 'no_dropout'):
+                epoch_embs = models.get_embeddings(self.model,self.train_loader)
+                self.model.dropout.update_kernel(epoch_embs[1]) # Apply dropout to middle layer
+
+
             epoch_start = time.time()
             train_loss, train_acc, train_acc5 = self.train_epoch(epoch)
             self.logger.log('Epoch time: {} s'.format(time.time() - epoch_start))
@@ -171,7 +177,7 @@ class GeneralTrainer(Trainer):
         train_loss = AverageMeter()
         train_top1_acc = AverageMeter()
         train_top5_acc = AverageMeter()
-        for batch_idx, (data, target) in enumerate(self.train_loader):
+        for batch_idx, (data, target) in enumerate(self.train_loader):            
             data, target = data.to(self.device, non_blocking = True), target.to(self.device, non_blocking = True)
             self.optimizer.zero_grad(set_to_none= True)
 
