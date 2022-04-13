@@ -11,7 +11,7 @@ class Dropout():
     def __init__(self, dropout_proportion: float):
         self.dropout_proportion = dropout_proportion
 
-    def update_kernel(self):
+    def update_kernel(self, embeddings):
         pass
 
     def apply_dropout(self):
