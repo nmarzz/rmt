@@ -2,13 +2,8 @@
 import os
 from datetime import datetime
 from argparse import Namespace
-import yaml
 
-config = open('config.yaml', 'r')
-parsed_config = yaml.load(config, Loader=yaml.FullLoader)
-
-
-LOGS_DIR = parsed_config['log_dir']
+LOGS_DIR = 'logs'
 if not os.path.exists(LOGS_DIR):
     os.mkdir(LOGS_DIR)
 

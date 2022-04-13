@@ -9,11 +9,9 @@ import torchvision
 from torchvision import datasets, transforms
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
-import yaml
 
-config = open('config.yaml', 'r')
-parsed_config = yaml.load(config, Loader=yaml.FullLoader)
-DATA_ROOT = parsed_config['data_dir']
+
+DATA_ROOT = 'data'
 
 
 def mnist_loader(batch_size: int, distributed: bool) -> None:
