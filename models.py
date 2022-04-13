@@ -12,11 +12,11 @@ from dropout import RBFDrop, BernDrop, SineDrop
 class MLP(nn.Module):
     ''' A basic 3 layer MLP '''
 
-    def __init__(self, input_dim: int, num_classes: int, hidden_dim: int = 64, dropout_proportion : float = None, dropout_type : str = 'k_bernoulli') -> None:
+    def __init__(self, input_dim: int, num_classes: int, hidden_dim: int = 128, dropout_proportion : float = None, dropout_type : str = 'k_bernoulli') -> None:
         super(MLP, self).__init__()
         self.input_dim = input_dim
-        self.fc1 = nn.Linear(input_dim, hidden_dim * 4)        
-        self.fc2 = nn.Linear(hidden_dim * 4, hidden_dim)
+        self.fc1 = nn.Linear(input_dim, hidden_dim * 2)        
+        self.fc2 = nn.Linear(hidden_dim * 2, hidden_dim)
         self.register_buffer('rescaling', torch.zeros(hidden_dim))
         self.batches_trained_for = 0
         self.fc3 = nn.Linear(hidden_dim, num_classes)

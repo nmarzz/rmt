@@ -80,7 +80,7 @@ def make_log_dir(args) -> str:
 
     dir = os.path.join(
         LOGS_DIR,
-        f'{args.model}_{args.dataset}_pretrained{args.pretrained}_epochs{args.epochs}_{args.optimizer}_lr{args.lr}_batch_size{args.batch_size}_seed{args.seed}')
+        f'{args.model}_{args.dataset}_pretrained{args.pretrained}_epochs{args.epochs}_{args.optimizer}_lr{args.lr}_batch_size{args.batch_size}')
 
     if os.path.exists(dir):
         exists = True

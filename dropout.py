@@ -26,16 +26,14 @@ class BernDrop(Dropout):
         mask = torch.ones_like(x)
 
         N = x.shape[-1]
-        weights = torch.ones_like(x) / N # uniformly
+        
+        weights = torch.ones(N) 
         idxs = torch.multinomial(weights, N - k)
-                
-        mask.scatter_(1, idxs, 0.)
+        mask = torch.zeros_like(x) 
+        mask[:,idxs] = 1        
+        x = x * mask
 
-        # Rescale to make testing mode easier
-        x = x * mask 
-        x = x / (k/N)    
-
-        return x    
+        return x, idxs                
 
 
 class RBFDrop(Dropout):       
@@ -93,8 +91,9 @@ class SineDrop(Dropout):
 
         # Step 1: Build the DPP
         with torch.no_grad():                        
-            dist = np.linalg.norm(embeddings[:, None, :] - embeddings[None, :, :], axis=-1)**2 / N
-            L = np.sin(dist * 20) / (dist * 20)
+            norm_dist = np.linalg.norm(embeddings[:, None, :] - embeddings[None, :, :], axis=-1)**2 / N
+            L = np.sin(norm_dist * 5) / (norm_dist * 5)
+            L[np.isnan(L)] = 1. # sin(x)/x = 1
             
             ##### Define the DPP 
             self.eig_vals, self.eig_vecs = np.linalg.eigh(L)

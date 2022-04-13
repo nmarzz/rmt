@@ -36,9 +36,9 @@ def mnist_loader(batch_size: int, distributed: bool) -> None:
 
     train_loader = DataLoader(
         train_set, batch_size=batch_size, sampler=sampler, num_workers=8,
-        pin_memory=True, shuffle=(not distributed))
+        pin_memory=False, shuffle=(not distributed))
 
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory= True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory= False)
 
     return train_loader, val_loader
 

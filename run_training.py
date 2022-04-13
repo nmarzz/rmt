@@ -32,7 +32,7 @@ def get_args(parser):
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--early-stop', type=int, default=50)
     parser.add_argument('--batch-size', type=int, default=64)
-    parser.add_argument('--seed', type=int, default=1)
+    # parser.add_argument('--seed', type=int, default=1)
 
     args = parser.parse_args()
 
@@ -67,13 +67,13 @@ def main():
     parser = argparse.ArgumentParser(description='')
     args = get_args(parser)
 
-    # Set random seed for reproducibility
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
+    # # Set random seed for reproducibility
+    # torch.manual_seed(args.seed)
+    # np.random.seed(args.seed)
+    # if torch.cuda.is_available():
+    #     torch.cuda.manual_seed_all(args.seed)
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = True
 
     # Launch training    
     main_worker(0, 1, False, args)
